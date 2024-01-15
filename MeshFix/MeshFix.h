@@ -311,7 +311,9 @@ void FixMesh(
     int max_hole_edges,
     float max_hole_diam,
     bool refine,
-    int max_retry
+    int max_retry,
+    bool fair = false,
+    std::vector<std::pair<std::vector<typename Polyhedron::Vertex_handle>, std::vector<typename Polyhedron::Facet_handle>>>* patch = nullptr
 )
 {
     using Kernel = typename Polyhedron::K;
@@ -332,7 +334,8 @@ void FixMesh(
         throw AlgError("Cannot remove non-manifold parts. Try increasing retry times.");
     }
 
-    Polyhedron m;
+    Polyhedron& m = output_mesh;
+    m.clear();
     m.BuildFromVerticesFaces(input_vertices, faces);
     
     CGAL::Polygon_mesh_processing::remove_isolated_vertices(m);
@@ -357,11 +360,25 @@ void FixMesh(
     {
         if(!filter_small_holes || (filter_small_holes && m.IsSmallHole(hh, max_hole_edges, max_hole_diam)))
         {
-            if(refine)
+            if(refine && fair)
+            {
+                std::vector<typename Polyhedron::Vertex_handle> patch_vertices;
+                std::vector<typename Polyhedron::Facet_handle> patch_faces;
+                CGAL::Polygon_mesh_processing::triangulate_refine_and_fair_hole(m, hh, std::back_inserter(patch_faces), std::back_inserter(patch_vertices));
+                if(patch != nullptr)
+                {
+                    patch->emplace_back(std::move(patch_vertices), std::move(patch_faces));
+                }
+            }
+            else if(refine)
             {
                 std::vector<typename Polyhedron::Vertex_handle> patch_vertices;
                 std::vector<typename Polyhedron::Facet_handle> patch_faces;
                 CGAL::Polygon_mesh_processing::triangulate_and_refine_hole(m, hh, std::back_inserter(patch_faces), std::back_inserter(patch_vertices));
+                if(patch != nullptr)
+                {
+                    patch->emplace_back(std::move(patch_vertices), std::move(patch_faces));
+                }
             }
             else
             {
@@ -370,8 +387,6 @@ void FixMesh(
             }
         }
     }
-
-    output_mesh = m;
 }
 
 template <typename Polyhedron>
@@ -387,7 +402,8 @@ void FixMeshWithLabel(
     int max_hole_edges,
     float max_hole_diam,
     bool refine,
-    int max_retry)
+    int max_retry,
+    std::vector<std::pair<std::vector<typename Polyhedron::Vertex_handle>, std::vector<typename Polyhedron::Facet_handle>>>* patch = nullptr)
 {
     using Kernel = typename Polyhedron::Traits;
     using Triangle = TTriangle<typename Polyhedron::Vertex::size_type>;
@@ -405,7 +421,8 @@ void FixMeshWithLabel(
     {
         throw AlgError("Cannot remove non-manifold parts. Try increasing retry times.");
     }
-    Polyhedron m;
+    Polyhedron& m = output_mesh;
+    m.clear();
     m.BuildFromVerticesFaces(input_vertices, faces);
 
     m.LoadLabels(input_labels);
@@ -432,8 +449,45 @@ void FixMeshWithLabel(
     {
         if (!filter_small_holes || (filter_small_holes && m.IsSmallHole(hh, max_hole_edges, max_hole_diam)))
         {
-            std::vector<typename Polyhedron::Facet_handle> patch_faces;
-            CGAL::Polygon_mesh_processing::triangulate_hole(m, hh, std::back_inserter(patch_faces));
+            if(refine)
+            {
+                std::vector<typename Polyhedron::Vertex_handle> patch_vertices;
+                std::vector<typename Polyhedron::Facet_handle> patch_faces;
+                CGAL::Polygon_mesh_processing::triangulate_and_refine_hole(m, hh, std::back_inserter(patch_faces), std::back_inserter(patch_vertices));
+
+                // labels of patch vertices
+                std::unordered_set<typename Polyhedron::Vertex_handle> patch_vset(patch_vertices.begin(), patch_vertices.end());
+                std::unordered_set<typename Polyhedron::Vertex_handle> neighbor_vset;
+                for(auto hv : patch_vset)
+                {
+                    for(auto nei : CGAL::vertices_around_target(hv, m))
+                    {
+                        if(patch_vset.count(nei) == 0)
+                        {
+                            neighbor_vset.insert(nei);
+                        }
+                    }
+                }
+                for(auto hv : patch_vset)
+                {
+                    auto nearest = *std::min_element(neighbor_vset.begin(), neighbor_vset.end(), [&](auto& lh, auto& rh) 
+                        { return CGAL::squared_distance(lh->point(), hv->point()) < CGAL::squared_distance(rh->point(), hv->point()); });
+                    hv->_label = nearest->_label;
+                }
+                if(patch != nullptr)
+                {
+                    patch->emplace_back(std::move(patch_vertices), std::move(patch_faces));
+                }
+            }
+            else
+            {
+                std::vector<typename Polyhedron::Facet_handle> patch_faces;
+                CGAL::Polygon_mesh_processing::triangulate_hole(m, hh, std::back_inserter(patch_faces));
+                if(patch != nullptr)
+                {
+                    patch->emplace_back(std::vector<typename Polyhedron::Vertex_handle>(), std::move(patch_faces));
+                }
+            }
         }
     }
 
