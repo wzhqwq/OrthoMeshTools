@@ -10,6 +10,7 @@ find_package(OpenMP REQUIRED)
 find_package(assimp REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(pybind11 CONFIG)
+find_package(argparse)
 include(CGAL_Eigen3_support)
 
 add_executable(OrthoScanBase "OrthoScanBase/OrthoScanBase.cpp" "MeshFix/MeshFix.cpp")

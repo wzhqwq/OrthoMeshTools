@@ -5,6 +5,7 @@
     "eigen3",
     "nlohmann-json",
     "pthread",
-    "pybind11"
+    "pybind11",
+    "argparse"
   ]
 }
