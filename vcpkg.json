@@ -1,12 +1,10 @@
 {
   "dependencies": [
     "assimp",
-    "ceres",
     "cgal",
     "eigen3",
     "nlohmann-json",
     "pthread",
-    "pybind11",
-    "argparse"
+    "pybind11"
   ]
 }
