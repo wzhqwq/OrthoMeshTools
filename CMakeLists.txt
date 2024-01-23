@@ -12,6 +12,9 @@ find_package(nlohmann_json REQUIRED)
 find_package(pybind11 CONFIG)
 include(CGAL_Eigen3_support)
 
+add_executable(OrthoScanBase "OrthoScanBase/OrthoScanBase.cpp" "MeshFix/MeshFix.cpp")
+target_link_libraries(OrthoScanBase PUBLIC Ortho argparse::argparse)
+
 if(pybind11_FOUND)
     pybind11_add_module(gumTrimLine "PyBind.cpp" "print.cpp" "MeshFix/MeshFix.cpp" "Polyhedron.cpp" "Polyhedron.h"
      "GumTrimLine/GumTrimLine.cpp")

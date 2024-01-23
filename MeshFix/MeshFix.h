@@ -490,8 +490,6 @@ void FixMeshWithLabel(
             }
         }
     }
-
-    output_mesh = m;
 }
 
 

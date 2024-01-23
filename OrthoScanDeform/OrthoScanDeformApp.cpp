@@ -129,11 +129,33 @@ std::unordered_map<int, Eigen::Transform<double, 3, Eigen::Affine>> LoadCBCTTeet
     return frames;
 }
 
+template <class Refs, typename Tag, typename Point>
+class VertexDeform : public VertexWithLabelFlag<Refs, Tag, Point>
+{
+public:
+    VertexDeform() = default;
+    explicit VertexDeform(const Point &p) : VertexWithLabelFlag<Refs, Tag, Point>(p) {}
+
+public:
+    Point ori_pos;
+};
+
+class ItemsDeform : public ItemsWithLabelFlag
+{
+public:
+    template <class Refs, class Traits>
+    struct Vertex_wrapper
+    {
+        using Point = typename Traits::Point_3;
+        using Vertex = VertexDeform<Refs, CGAL::Tag_true, Point>;
+    };
+};
+
 int main(int argc, char* argv[])
 {
     Eigen::Matrix3f m0;
     using KernelEpick = CGAL::Exact_predicates_inexact_constructions_kernel;
-    using Polyhedron = TPolyhedronWithLabel<ItemsWithLabelFlag, KernelEpick>;
+    using Polyhedron = TPolyhedronWithLabel<ItemsDeform, KernelEpick>;
     argparse::ArgumentParser argparse("OrthoScanDeform");
     argparse.add_argument("--input_file", "-i").required();
     argparse.add_argument("--label_file", "-l").required();
@@ -196,6 +218,9 @@ int main(int argc, char* argv[])
     {
         mesh.LoadLabels(label_file);
     }
+    auto [vertices, faces] = mesh.ToVerticesTriangles();
+    FixMeshWithLabel(vertices, faces, mesh.WriteLabels(), mesh, true, 1000, true, false, 100, 100, true, 10);
+
     for(auto hv : CGAL::vertices(mesh))
     {
         if(hv->_label % 10 == 8)
@@ -226,7 +251,7 @@ int main(int argc, char* argv[])
     }
 
     // A temp solution to determine bottom part (which won't deform).
-    auto aabb = CGAL::bbox_3(mesh.points_begin(), mesh.points_end());
+    // auto aabb = CGAL::bbox_3(mesh.points_begin(), mesh.points_end());
     // if(upper)
     // {
     //     for(auto hv : CGAL::vertices(mesh))
@@ -272,13 +297,7 @@ int main(int argc, char* argv[])
         deformer.SetCbctCentroids(cbct_frames);
         
         printf("Load %zd steps.\n", paths.size());
-        for(int i = 0; i < paths.size(); i++)
-        {
-            printf("Deform step %d of %zd tooth...", i, paths[i].size());
-            auto m = deformer.Deform(paths[paths.size() - 1 - i]);
-            printf("Done.\n");
-            m.WriteOBJ("./deform_step" + std::to_string(paths.size() - 1 - i) + ".obj");
-        }
+        deformer.Deform(paths);
     }
     catch(const std::exception& e)
     {
